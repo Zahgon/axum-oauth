@@ -1,7 +1,4 @@
-use axum::{
-    http::StatusCode,
-    response::{IntoResponse, Response},
-};
+use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -18,7 +15,7 @@ pub enum Error {
         source: argon2::password_hash::Error,
     },
     OAuth {
-        source: oxide_auth_axum::WebError,
+        source: oxide_auth_actix::WebError,
     },
     ResourceConflict,
     InternalError,
@@ -55,14 +52,24 @@ impl std::error::Error for Error {
     }
 }
 
-impl IntoResponse for Error {
-    fn into_response(self) -> Response {
+impl ResponseError for Error {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            Self::OAuth { source } => source.status_code(),
+            Self::ResourceConflict => StatusCode::CONFLICT,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+
+    fn error_response(&self) -> HttpResponse {
         if let Self::OAuth { source } = self {
-            source.into_response()
+            source.error_response()
         } else if let Self::ResourceConflict = self {
-            (StatusCode::CONFLICT, "User already exists").into_response()
+            HttpResponse::build(StatusCode::CONFLICT)
+                .content_type("text/plain; charset=utf-8")
+                .body("User already exists")
         } else {
-            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
         }
     }
 }

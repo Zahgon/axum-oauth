@@ -1,22 +1,14 @@
-use crate::oauth::{
-    database::Database,
-    error::{Error, Result},
-};
-
-use axum::{
-    extract::{Form, FromRef, State},
-    response::{IntoResponse, Json},
-    routing::post,
-    Router,
-};
+use actix_web::{web, HttpResponse};
 use serde::{Deserialize, Serialize};
 
-pub fn routes<S>() -> Router<S>
-where
-    S: Send + Sync + 'static + Clone,
-    Database: FromRef<S>,
-{
-    Router::new().route("/", post(post_client))
+use crate::oauth::{database::Database, error::Error, routes::Form};
+
+pub fn routes(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::resource("/client")
+            .route(web::post().to(post_client))
+            .default_service(web::to(|payload: web::Payload| super::method_not_allowed(payload, "POST"))),
+    );
 }
 
 #[derive(Deserialize)]
@@ -34,19 +26,18 @@ struct ClientForm {
 }
 
 async fn post_client(
-    State(mut db): State<Database>,
-    Form(client_form): Form<ClientForm>,
-) -> Result<impl IntoResponse> {
+    db: web::Data<Database>,
+    client_form: Form<ClientForm>,
+) -> Result<HttpResponse, Error> {
     tracing::debug!("POST Handler: post_client()");
-
+    let client_form = client_form.into_inner();
+    let mut db = db.as_ref().clone();
     let client_name = client_form.name;
-
     let (client_id, client_secret) = match client_form.r#type {
         ClientType::Public => db
             .register_public_client(&client_name, &client_form.redirect_uri, "")
             .await
             .map_err(|e| Error::Database { source: (e) })?,
-
         ClientType::Confidential => db
             .register_confidential_client(&client_name, &client_form.redirect_uri, "")
             .await
@@ -64,9 +55,9 @@ async fn post_client(
         client_id,
         client_secret
     );
-    Ok(Json(Response {
+
+    Ok(HttpResponse::Ok().json(Response {
         client_id,
         client_secret,
-    })
-    .into_response())
+    }))
 }

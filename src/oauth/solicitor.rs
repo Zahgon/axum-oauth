@@ -11,7 +11,7 @@ use crate::oauth::{
 use askama::Template;
 use oxide_auth::endpoint::{OwnerConsent, Solicitation, WebRequest};
 use oxide_auth_async::endpoint::OwnerSolicitor;
-use oxide_auth_axum::{OAuthRequest, OAuthResponse, WebError};
+use oxide_auth_actix::{OAuthRequest, OAuthResponse, WebError};
 
 pub struct Solicitor {
     db: Database,

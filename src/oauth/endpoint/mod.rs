@@ -15,7 +15,7 @@ use oxide_auth_async::{
     },
     primitives,
 };
-use oxide_auth_axum::OAuthRequest;
+use oxide_auth_actix::OAuthRequest;
 
 pub mod extension;
 

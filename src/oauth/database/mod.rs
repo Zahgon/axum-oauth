@@ -1,4 +1,3 @@
-use axum_macros::FromRef;
 use oxide_auth::{
     endpoint::Scope,
     primitives::registrar::{Client, RegisteredUrl},
@@ -17,7 +16,7 @@ use super::models::{ClientId, UserId};
 pub mod clientmap;
 pub mod resource;
 
-#[derive(Clone, FromRef)]
+#[derive(Clone)]
 pub struct Database {
     pub(crate) inner: Inner,
 }

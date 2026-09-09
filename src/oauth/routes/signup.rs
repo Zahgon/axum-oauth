@@ -1,29 +1,28 @@
-use super::{Callback, SignUpForm};
-use crate::oauth::{
-    database::Database,
-    error::{Error, Result},
-};
-use axum::{
-    extract::{Form, FromRef, Query, State},
-    http::StatusCode,
-    routing::post,
-    Router,
-};
+use actix_web::{http::StatusCode, web, HttpResponse};
 use secrecy::Secret;
 
-pub fn routes<S>() -> Router<S>
-where
-    S: Send + Sync + 'static + Clone,
-    Database: FromRef<S>,
-{
-    Router::new().route("/", post(post_signup))
+use crate::oauth::{
+    database::Database,
+    error::Error,
+    routes::{Callback, Form, SignUpForm},
+};
+
+pub fn routes(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::resource("/signup")
+            .app_data(super::query_config())
+            .route(web::post().to(post_signup))
+            .default_service(web::to(|payload: web::Payload| super::method_not_allowed(payload, "POST"))),
+    );
 }
 
 async fn post_signup(
-    State(mut db): State<Database>,
-    _query: Option<Query<Callback<'_>>>,
-    Form(user): Form<SignUpForm>,
-) -> Result<StatusCode, Error> {
+    db: web::Data<Database>,
+    _query: Option<web::Query<Callback<'static>>>,
+    user: Form<SignUpForm>,
+) -> Result<HttpResponse, Error> {
+    let user = user.into_inner();
+    let mut db = db.as_ref().clone();
     if db.contains_user_name(&user.username).await {
         return Err(Error::ResourceConflict);
     }
@@ -35,5 +34,5 @@ async fn post_signup(
     )
     .await;
 
-    Ok(StatusCode::CREATED)
+    Ok(HttpResponse::build(StatusCode::CREATED).finish())
 }

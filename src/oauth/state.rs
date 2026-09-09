@@ -9,7 +9,7 @@ use tokio::sync::Mutex;
 use super::endpoint::{extension::Empty, Endpoint};
 use crate::oauth::database::Database;
 
-#[derive(Clone, axum_macros::FromRef)]
+#[derive(Clone)]
 pub struct State {
     registrar: Database,
     authorizer: Arc<Mutex<AuthMap<RandomGenerator>>>,

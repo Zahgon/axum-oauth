@@ -6,7 +6,7 @@
 
 This is a demo application I created to help me understand authentication in rust using OAuth 2.0. Specifically, it shows how to protect your backend APIs using server-side OAuth. It uses the [oxide-auth](https://github.com/HeroicKatora/oxide-auth),
 [oxide-auth-async](https://github.com/HeroicKatora/oxide-auth/tree/master/oxide-auth-async), and 
-[oxide-auth-axum](https://github.com/HeroicKatora/oxide-auth/tree/master/oxide-auth-axum) crates.
+[oxide-auth-actix](https://github.com/HeroicKatora/oxide-auth/tree/master/oxide-auth-actix) crates.
 The oxide-auth documentation is a bit sparse and it isn't immediately obvious how to go
 about implementing an authentication server with it so I created this demo. As a starting point I used the only example
 I could find of an app using Oxide-auth with
