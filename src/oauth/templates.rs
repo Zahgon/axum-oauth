@@ -1,6 +1,24 @@
+use actix_web::{
+    http::{header, StatusCode},
+    HttpResponse,
+};
 use askama::Template;
 
 use oxide_auth::endpoint::WebRequest;
+
+/// Render a template into a response, mirroring how the previous framework's
+/// template responder behaved: HTML with an explicit charset on success, and a
+/// plain-text internal error carrying the render failure otherwise.
+pub fn render_template<T: Template>(template: &T, status: StatusCode) -> HttpResponse {
+    match template.render() {
+        Ok(body) => HttpResponse::build(status)
+            .insert_header((header::CONTENT_TYPE, "text/html; charset=utf-8"))
+            .body(body),
+        Err(err) => HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR)
+            .insert_header((header::CONTENT_TYPE, "text/plain; charset=utf-8"))
+            .body(err.to_string()),
+    }
+}
 
 #[derive(Template)]
 #[template(path = "signin.html")]
@@ -19,7 +37,7 @@ pub struct Authorize<'a> {
 
 impl<'a> Authorize<'a> {
     pub fn new(
-        req: &mut oxide_auth_axum::OAuthRequest,
+        req: &mut oxide_auth_actix::OAuthRequest,
         solicitation: &oxide_auth::endpoint::Solicitation<'a>,
         username: &'a str,
         client_name: &'a str,

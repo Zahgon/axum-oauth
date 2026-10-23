@@ -5,40 +5,51 @@ pub struct Grant<S = ()> {
     _type: std::marker::PhantomData<S>,
 }
 
-use axum::{
-    extract::{FromRef, FromRequestParts},
-    http::request::Parts,
-};
-use oxide_auth_axum::{OAuthResource, OAuthResponse, WebError};
+use actix_web::{dev::Payload, error::InternalError, web, FromRequest, HttpRequest};
+use futures::future::LocalBoxFuture;
+use oxide_auth_actix::{OAuthResource, WebError};
 
-#[axum::async_trait]
-impl<State, Scope> FromRequestParts<State> for Grant<Scope>
+impl<Scope> FromRequest for Grant<Scope>
 where
-    super::super::state::State: FromRef<State>,
-    State: Send + Sync + 'static,
-    Scope: scopes::Scope,
+    Scope: scopes::Scope + 'static,
 {
-    type Rejection = Result<OAuthResponse, WebError>;
+    type Error = actix_web::Error;
+    type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
 
-    async fn from_request_parts(parts: &mut Parts, state: &State) -> Result<Self, Self::Rejection> {
-        tracing::debug!("Middleware: Grant<Scope>: parts: {:?}", parts);
-        let req = OAuthResource::from_request_parts(parts, state)
-            .await
-            .map_err(Err)?;
+    fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
+        tracing::debug!("Middleware: Grant<Scope>: parts: {:?}", req);
+        let request = req.clone();
+        let state = req
+            .app_data::<web::Data<crate::oauth::state::State>>()
+            .cloned();
 
-        let state = crate::oauth::state::State::from_ref(state);
+        Box::pin(async move {
+            let resource = OAuthResource::new(&request)?;
 
-        let auth = state
-            .endpoint()
-            .await
-            .with_scopes(&[Scope::SCOPE.parse().unwrap()])
-            .resource_flow()
-            .execute(req.into())
-            .await;
+            let state = match state {
+                Some(state) => state,
+                None => return Err(WebError::InternalError(None).into()),
+            };
 
-        auth.map(|grant| Self {
-            grant,
-            _type: Default::default(),
+            let auth = state
+                .endpoint()
+                .await
+                .with_scopes(&[Scope::SCOPE.parse().unwrap()])
+                .resource_flow()
+                .execute(resource.into())
+                .await;
+
+            match auth {
+                Ok(grant) => Ok(Self {
+                    grant,
+                    _type: Default::default(),
+                }),
+                Err(Ok(response)) => {
+                    let response = crate::oauth::into_http_response(response, &request);
+                    Err(InternalError::from_response(WebError::Authorization, response).into())
+                }
+                Err(Err(error)) => Err(error.into()),
+            }
         })
     }
 }

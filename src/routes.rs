@@ -5,22 +5,22 @@ use crate::oauth::{
     error::Error,
     models::{ClientId, UserId},
     primitives::scopes::Grant,
+    routes::Json,
     scopes::{Account, Read, Write},
 };
-use axum::{
-    extract::{FromRef, State},
-    routing::get,
-    Json, Router,
-};
+use actix_web::web;
 use serde::{Deserialize, Serialize};
 
-pub fn routes<S>() -> Router<S>
-where
-    crate::oauth::state::State: FromRef<S>,
-    S: Send + Sync + 'static + Clone,
-    Database: FromRef<S>,
-{
-    Router::new().route("/user", get(user).post(update_account_name))
+pub fn routes(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::resource("/user")
+            .route(web::get().to(user))
+            .route(web::head().to(user))
+            .route(web::post().to(update_account_name))
+            .default_service(web::to(|payload: web::Payload| {
+                crate::oauth::routes::method_not_allowed(payload, "GET,HEAD,POST")
+            })),
+    );
 }
 
 #[derive(Debug, Serialize)]
@@ -38,9 +38,9 @@ pub struct UserInfo {
 }
 
 pub async fn user(
-    State(db): State<Database>,
+    db: web::Data<Database>,
     grant: Grant<Read<Account>>,
-) -> Result<Json<UserInfo>, Error> {
+) -> Result<web::Json<UserInfo>, Error> {
     tracing::debug!("enter -> user()");
     let u = grant.grant.owner_id;
     let user_record = db
@@ -67,7 +67,7 @@ pub async fn user(
         authorized_clients: clients,
     };
 
-    Ok(Json(user_info))
+    Ok(web::Json(user_info))
 }
 
 #[derive(Debug, Deserialize)]
@@ -81,11 +81,19 @@ pub struct MsgReply {
 }
 
 async fn update_account_name(
-    State(mut db): State<Database>,
-    grant: Grant<Write<Account>>,
-    Json(form): Json<ChangeResource>,
-) -> Result<Json<MsgReply>, Error> {
+    db: web::Data<Database>,
+    form: Json<ChangeResource>,
+    grant: Result<Grant<Write<Account>>, actix_web::Error>,
+) -> Result<web::Json<MsgReply>, actix_web::Error> {
     tracing::debug!("enter -> update_account_name()");
+    // Both extractors defer their verdict, so neither aborts the other mid-flight:
+    // a tuple of extractors resolves the instant one of them fails, dropping the
+    // futures still pending, and an abandoned body reader leaves the request
+    // payload unread — which puts `Connection: close` on the response. Reporting
+    // the grant first here keeps the authorization failure ahead of a body error.
+    let grant = grant?;
+    let form = form.into_inner()?;
+    let mut db = db.as_ref().clone();
     let u = grant.grant.owner_id;
     let success = db
         .update_given_name_by_id(&AuthUser::from_str(&u).unwrap(), &form.given_name)
@@ -94,5 +102,5 @@ async fn update_account_name(
 
     let res = MsgReply { success };
 
-    Ok(Json(res))
+    Ok(web::Json(res))
 }

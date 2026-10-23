@@ -4,6 +4,7 @@ use oxide_auth::{
     frontends::simple::extensions::Pkce,
     primitives::{authorizer::AuthMap, generator::RandomGenerator, issuer::TokenMap, scope::Scope},
 };
+use oxide_auth_actix::OAuthRequest;
 use oxide_auth_async::{
     endpoint::{
         self,
@@ -15,7 +16,6 @@ use oxide_auth_async::{
     },
     primitives,
 };
-use oxide_auth_axum::OAuthRequest;
 
 pub mod extension;
 
